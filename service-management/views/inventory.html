@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-800">Controle de Estoque</h2>
+    <button id="new-item-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+        <i class="fas fa-plus mr-2"></i>Novo Item
+    </button>
+</div>
+
+<!-- Modal para novo item -->
+<div id="item-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
+        <div class="flex justify-between items-center border-b px-6 py-4">
+            <h3 class="text-lg font-semibold" id="modal-title">Adicionar Item</h3>
+            <button id="close-modal" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <form id="item-form" class="p-6">
+            <input type="hidden" id="item-id">
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="item-name">
+                    Nome do Item
+                </label>
+                <input type="text" id="item-name" required
+                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="item-stock">
+                    Quantidade em Estoque
+                </label>
+                <input type="number" id="item-stock" min="0" required
+                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="item-threshold">
+                    Quantidade Mínima
+                </label>
+                <input type="number" id="item-threshold" min="0" required
+                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="item-category">
+                    Categoria
+                </label>
+                <input type="text" id="item-category" required
+                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button type="button" id="cancel-item" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg">
+                    Cancelar
+                </button>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                    Salvar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Filtros e busca -->
+<div class="bg-white rounded-lg shadow p-4 mb-6">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+        <div class="flex items-center space-x-4">
+            <div class="relative">
+                <input type="text" id="search-items" placeholder="Buscar itens..." 
+                    class="pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+            </div>
+            <select id="filter-category" class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">Todas categorias</option>
+                <option value="Filtros">Filtros</option>
+                <option value="Freios">Freios</option>
+                <option value="Motor">Motor</option>
+                <option value="Elétrica">Elétrica</option>
+            </select>
+        </div>
+        <div>
+            <button id="low-stock-btn" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-4 py-2 rounded-lg">
+                <i class="fas fa-exclamation-triangle mr-2"></i>Itens com estoque baixo
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Tabela de itens -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estoque</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mínimo</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200" id="inventory-list">
+                <!-- Dados serão carregados via JavaScript -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // Carregar dados quando a página for carregada
+    document.addEventListener('DOMContentLoaded', function() {
+        loadInventory();
+        setupModal();
+        setupFilters();
+    });
+
+    function loadInventory() {
+        fetch('/api/inventory')
+            .then(response => response.json())
+            .then(inventory => {
+                const tbody = document.getElementById('inventory-list');
+                tbody.innerHTML = '';
+
+                inventory.forEach(item => {
+                    const tr = document.createElement('tr');
+                    const stockStatus = item.stock < item.threshold ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800';
+                    const statusText = item.stock < item.threshold ? 'Estoque Baixo' : 'Disponível';
+                    
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.name}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.category}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.stock}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.threshold}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${stockStatus}">
+                                ${statusText}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button class="text-blue-600 hover:text-blue-900 mr-3 edit-item" data-id="${item.id}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="text-red-600 hover:text-red-900 delete-item" data-id="${item.id}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                // Adicionar event listeners para os botões de edição/exclusão
+                document.querySelectorAll('.edit-item').forEach(btn => {
+                    btn.addEventListener('click', () => editItem(btn.dataset.id));
+                });
+
+                document.querySelectorAll('.delete-item').forEach(btn => {
+                    btn.addEventListener('click', () => deleteItem(btn.dataset.id));
+                });
+            })
+            .catch(error => console.error('Erro ao carregar inventário:', error));
+    }
+
+    function setupModal() {
+        const modal = document.getElementById('item-modal');
+        const newItemBtn = document.getElementById('new-item-btn');
+        const closeModalBtn = document.getElementById('close-modal');
+        const cancelItemBtn = document.getElementById('cancel-item');
+        const itemForm = document.getElementById('item-form');
+        const modalTitle = document.getElementById('modal-title');
+
+        newItemBtn.addEventListener('click', () => {
+            itemForm.reset();
+            document.getElementById('item-id').value = '';
+            modalTitle.textContent = 'Adicionar Item';
+            modal.classList.remove('hidden');
+        });
+
+        closeModalBtn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+
+        cancelItemBtn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+
+        itemForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const itemData = {
+                id: document.getElementById('item-id').value || Date.now().toString(),
+                name: document.getElementById('item-name').value,
+                stock: parseInt(document.getElementById('item-stock').value),
+                threshold: parseInt(document.getElementById('item-threshold').value),
+                category: document.getElementById('item-category').value
+            };
+
+            const method = document.getElementById('item-id').value ? 'PUT' : 'POST';
+            const url = method === 'POST' ? '/api/inventory' : `/api/inventory/${itemData.id}`;
+
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(itemData)
+            })
+            .then(response => {
+                if (response.ok) {
+                    modal.classList.add('hidden');
+                    loadInventory();
+                }
+            })
+            .catch(error => console.error('Erro ao salvar item:', error));
+        });
+    }
+
+    function setupFilters() {
+        const searchInput = document.getElementById('search-items');
+        const categoryFilter = document.getElementById('filter-category');
+        const lowStockBtn = document.getElementById('low-stock-btn');
+
+        searchInput.addEventListener('input', applyFilters);
+        categoryFilter.addEventListener('change', applyFilters);
+        lowStockBtn.addEventListener('click', filterLowStock);
+    }
+
+    function applyFilters() {
+        const searchTerm = document.getElementById('search-items').value.toLowerCase();
+        const category = document.getElementById('filter-category').value;
+        
+        fetch('/api/inventory')
+            .then(response => response.json())
+            .then(inventory => {
+                let filtered = inventory.filter(item => {
+                    const matchesSearch = item.name.toLowerCase().includes(searchTerm);
+                    const matchesCategory = category === '' || item.category === category;
+                    return matchesSearch && matchesCategory;
+                });
+
+                renderFilteredInventory(filtered);
+            });
+    }
+
+    function filterLowStock() {
+        fetch('/api/inventory')
+            .then(response => response.json())
+            .then(inventory => {
+                const filtered = inventory.filter(item => item.stock < item.threshold);
+                renderFilteredInventory(filtered);
+            });
+    }
+
+    function renderFilteredInventory(items) {
+        const tbody = document.getElementById('inventory-list');
+        tbody.innerHTML = '';
+
+        items.forEach(item => {
+            const tr = document.createElement('tr');
+            const stockStatus = item.stock < item.threshold ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800';
+            const statusText = item.stock < item.threshold ? 'Estoque Baixo' : 'Disponível';
+            
+            tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.category}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.stock}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.threshold}</td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${stockStatus}">
+                        ${statusText}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button class="text-blue-600 hover:text-blue-900 mr-3 edit-item" data-id="${item.id}">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="text-red-600 hover:text-red-900 delete-item" data-id="${item.id}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Reatribuir event listeners
+        document.querySelectorAll('.edit-item').forEach(btn => {
+            btn.addEventListener('click', () => editItem(btn.dataset.id));
+        });
+
+        document.querySelectorAll('.delete-item').forEach(btn => {
+            btn.addEventListener('click', () => deleteItem(btn.dataset.id));
+        });
+    }
+
+    function editItem(itemId) {
+        fetch(`/api/inventory/${itemId}`)
+            .then(response => response.json())
+            .then(item => {
+                document.getElementById('item-id').value = item.id;
+                document.getElementById('item-name').value = item.name;
+                document.getElementById('item-stock').value = item.stock;
+                document.getElementById('item-threshold').value = item.threshold;
+                document.getElementById('item-category').value = item.category;
+                
+                document.getElementById('modal-title').textContent = 'Editar Item';
+                document.getElementById('item-modal').classList.remove('hidden');
+            })
+            .catch(error => console.error('Erro ao carregar item:', error));
+    }
+
+    function deleteItem(itemId) {
+        if (confirm('Tem certeza que deseja excluir este item do estoque?')) {
+            fetch(`/api/inventory/${itemId}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (response.ok) {
+                    loadInventory();
+                }
+            })
+            .catch(error => console.error('Erro ao excluir item:', error));
+        }
+    }
+</script>
+{% endblock %}
