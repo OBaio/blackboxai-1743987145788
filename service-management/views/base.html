@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Orçamento e Manutenção</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .bg-custom {
+            background-image: url('https://images.pexels.com/photos/3761509/pexels-photo-3761509.jpeg');
+            background-size: cover;
+            background-position: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <header class="bg-blue-600 text-white shadow-lg">
+        <nav class="container mx-auto px-4 py-3">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold">
+                    <i class="fas fa-tools mr-2"></i>Controle de Manutenção
+                </h1>
+                <ul class="flex space-x-6">
+                    <li><a href="/" class="hover:text-blue-200"><i class="fas fa-home mr-1"></i>Dashboard</a></li>
+                    <li><a href="/service-orders" class="hover:text-blue-200"><i class="fas fa-clipboard-list mr-1"></i>Ordens de Serviço</a></li>
+                    <li><a href="/inventory" class="hover:text-blue-200"><i class="fas fa-boxes mr-1"></i>Estoque</a></li>
+                    <li><a href="/budget" class="hover:text-blue-200"><i class="fas fa-wallet mr-1"></i>Orçamento</a></li>
+                </ul>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto px-4 py-6">
+        <!-- Conteúdo específico de cada página será inserido aqui -->
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="bg-gray-800 text-white py-4 mt-8">
+        <div class="container mx-auto px-4 text-center">
+            <p>Sistema de Controle de Orçamento e Manutenção &copy; 2023</p>
+        </div>
+    </footer>
+
+    <script>
+        // Funções JavaScript comuns
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('pt-BR', { 
+                style: 'currency', 
+                currency: 'BRL' 
+            }).format(value);
+        }
+    </script>
+</body>
+</html>
