@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <!-- Card Total de Ordens -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-blue-100 text-blue-600 mr-4">
+                <i class="fas fa-clipboard-list text-2xl"></i>
+            </div>
+            <div>
+                <p class="text-gray-500">Total de Ordens</p>
+                <h3 class="text-2xl font-bold" id="total-orders">0</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Estoque -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-green-100 text-green-600 mr-4">
+                <i class="fas fa-boxes text-2xl"></i>
+            </div>
+            <div>
+                <p class="text-gray-500">Itens em Estoque</p>
+                <h3 class="text-2xl font-bold" id="total-items">0</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Orçamento -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-yellow-100 text-yellow-600 mr-4">
+                <i class="fas fa-wallet text-2xl"></i>
+            </div>
+            <div>
+                <p class="text-gray-500">Orçamento Restante</p>
+                <h3 class="text-2xl font-bold" id="remaining-budget">R$ 0,00</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alertas -->
+<div id="alerts-container" class="mb-8">
+    <!-- Alertas serão inseridos dinamicamente aqui -->
+</div>
+
+<!-- Últimas Ordens -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h2 class="text-lg font-semibold text-gray-800">Últimas Ordens de Serviço</h2>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Técnico</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200" id="recent-orders">
+                <!-- Dados serão carregados via JavaScript -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // Carregar dados do dashboard
+    async function loadDashboardData() {
+        try {
+            const [ordersRes, inventoryRes, budgetRes] = await Promise.all([
+                fetch('/api/orders'),
+                fetch('/api/inventory'),
+                fetch('/api/budget')
+            ]);
+            
+            const orders = await ordersRes.json();
+            const inventory = await inventoryRes.json();
+            const budget = await budgetRes.json();
+
+            // Atualizar cards
+            document.getElementById('total-orders').textContent = orders.length;
+            document.getElementById('total-items').textContent = inventory.length;
+            document.getElementById('remaining-budget').textContent = 
+                formatCurrency(budget.limit - budget.expenses);
+
+            // Gerar alertas
+            generateAlerts(inventory, budget);
+
+            // Carregar últimas ordens
+            loadRecentOrders(orders.slice(-5).reverse());
+        } catch (error) {
+            console.error('Erro ao carregar dados:', error);
+        }
+    }
+
+    function generateAlerts(inventory, budget) {
+        const alertsContainer = document.getElementById('alerts-container');
+        alertsContainer.innerHTML = '';
+
+        // Verificar estoque baixo
+        const lowStockItems = inventory.filter(item => item.stock < item.threshold);
+        if (lowStockItems.length > 0) {
+            const alert = document.createElement('div');
+            alert.className = 'bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4';
+            alert.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <p>${lowStockItems.length} itens com estoque abaixo do mínimo</p>
+                </div>
+            `;
+            alertsContainer.appendChild(alert);
+        }
+
+        // Verificar orçamento
+        const budgetUsage = (budget.expenses / budget.limit) * 100;
+        if (budgetUsage > 80) {
+            const alert = document.createElement('div');
+            alert.className = 'bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4';
+            alert.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-circle mr-2"></i>
+                    <p>Orçamento utilizado: ${budgetUsage.toFixed(0)}%</p>
+                </div>
+            `;
+            alertsContainer.appendChild(alert);
+        }
+    }
+
+    function loadRecentOrders(orders) {
+        const tbody = document.getElementById('recent-orders');
+        tbody.innerHTML = '';
+
+        orders.forEach(order => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.id}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.client}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.technician}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatCurrency(order.cost)}</td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                        ${order.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                        ${order.status === 'completed' ? 'Concluído' : 'Pendente'}
+                    </span>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Carregar dados quando a página for carregada
+    document.addEventListener('DOMContentLoaded', loadDashboardData);
+</script>
+{% endblock %}
