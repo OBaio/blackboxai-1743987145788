@@ -1,0 +1,16 @@
+[
+  {
+    "id": "1",
+    "name": "Filtro de Óleo",
+    "stock": 50,
+    "threshold": 10,
+    "category": "Filtros"
+  },
+  {
+    "id": "2",
+    "name": "Pastilha de Freio",
+    "stock": 30,
+    "threshold": 5,
+    "category": "Freios"
+  }
+]
