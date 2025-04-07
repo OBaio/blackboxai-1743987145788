@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-800">Ordens de Serviço</h2>
+    <button id="new-order-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+        <i class="fas fa-plus mr-2"></i>Nova Ordem
+    </button>
+</div>
+
+<!-- Modal para nova ordem (inicialmente oculto) -->
+<div id="order-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
+        <div class="flex justify-between items-center border-b px-6 py-4">
+            <h3 class="text-lg font-semibold">Nova Ordem de Serviço</h3>
+            <button id="close-modal" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <form id="order-form" class="p-6">
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="client-name">
+                    Nome do Cliente
+                </label>
+                <input type="text" id="client-name" required
+                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="technician">
+                    Técnico Responsável
+                </label>
+                <input type="text" id="technician" required
+                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="parts-used">
+                    Peças Utilizadas
+                </label>
+                <select id="parts-used" multiple
+                    class="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    <!-- Opções serão preenchidas via JavaScript -->
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="order-cost">
+                    Custo Total (R$)
+                </label>
+                <input type="number" step="0.01" id="order-cost" required
+                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button type="button" id="cancel-order" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg">
+                    Cancelar
+                </button>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                    Salvar Ordem
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Lista de ordens de serviço -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Técnico</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Peças</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200" id="orders-list">
+                <!-- Dados serão carregados via JavaScript -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // Carregar dados quando a página for carregada
+    document.addEventListener('DOMContentLoaded', function() {
+        loadOrders();
+        loadInventoryForSelect();
+        setupModal();
+    });
+
+    function loadOrders() {
+        fetch('/api/orders')
+            .then(response => response.json())
+            .then(orders => {
+                const tbody = document.getElementById('orders-list');
+                tbody.innerHTML = '';
+
+                orders.forEach(order => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.id}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.client}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.technician}</td>
+                        <td class="px-6 py-4 text-sm text-gray-500">${order.parts.join(', ')}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatCurrency(order.cost)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                ${order.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                                ${order.status === 'completed' ? 'Concluído' : 'Pendente'}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button class="text-blue-600 hover:text-blue-900 mr-3 edit-order" data-id="${order.id}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="text-red-600 hover:text-red-900 delete-order" data-id="${order.id}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                // Adicionar event listeners para os botões de edição/exclusão
+                document.querySelectorAll('.edit-order').forEach(btn => {
+                    btn.addEventListener('click', () => editOrder(btn.dataset.id));
+                });
+
+                document.querySelectorAll('.delete-order').forEach(btn => {
+                    btn.addEventListener('click', () => deleteOrder(btn.dataset.id));
+                });
+            })
+            .catch(error => console.error('Erro ao carregar ordens:', error));
+    }
+
+    function loadInventoryForSelect() {
+        fetch('/api/inventory')
+            .then(response => response.json())
+            .then(inventory => {
+                const select = document.getElementById('parts-used');
+                select.innerHTML = '';
+
+                inventory.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item.id;
+                    option.textContent = `${item.name} (${item.stock} disponíveis)`;
+                    select.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Erro ao carregar inventário:', error));
+    }
+
+    function setupModal() {
+        const modal = document.getElementById('order-modal');
+        const newOrderBtn = document.getElementById('new-order-btn');
+        const closeModalBtn = document.getElementById('close-modal');
+        const cancelOrderBtn = document.getElementById('cancel-order');
+        const orderForm = document.getElementById('order-form');
+
+        newOrderBtn.addEventListener('click', () => {
+            orderForm.reset();
+            modal.classList.remove('hidden');
+        });
+
+        closeModalBtn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+
+        cancelOrderBtn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+
+        orderForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const orderData = {
+                id: Date.now().toString(),
+                client: document.getElementById('client-name').value,
+                technician: document.getElementById('technician').value,
+                parts: Array.from(document.getElementById('parts-used').selectedOptions)
+                    .map(option => option.textContent.split(' ')[0]),
+                cost: parseFloat(document.getElementById('order-cost').value),
+                status: 'pending',
+                date: new Date().toISOString()
+            };
+
+            fetch('/api/orders', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(orderData)
+            })
+            .then(response => {
+                if (response.ok) {
+                    modal.classList.add('hidden');
+                    loadOrders();
+                    // Atualizar estoque
+                    updateInventoryAfterOrder(orderData.parts);
+                }
+            })
+            .catch(error => console.error('Erro ao salvar ordem:', error));
+        });
+    }
+
+    function updateInventoryAfterOrder(partsUsed) {
+        // Implementar lógica para atualizar estoque
+        console.log('Peças utilizadas:', partsUsed);
+        // Aqui você adicionaria a lógica para diminuir o estoque das peças utilizadas
+    }
+
+    function editOrder(orderId) {
+        // Implementar lógica para edição
+        console.log('Editar ordem:', orderId);
+    }
+
+    function deleteOrder(orderId) {
+        if (confirm('Tem certeza que deseja excluir esta ordem?')) {
+            // Implementar lógica para exclusão
+            console.log('Excluir ordem:', orderId);
+        }
+    }
+</script>
+{% endblock %}
