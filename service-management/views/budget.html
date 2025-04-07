@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-800">Controle de Orçamento</h2>
+    <button id="set-budget-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+        <i class="fas fa-pencil-alt mr-2"></i>Definir Orçamento
+    </button>
+</div>
+
+<!-- Modal para definir orçamento -->
+<div id="budget-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md">
+        <div class="flex justify-between items-center border-b px-6 py-4">
+            <h3 class="text-lg font-semibold">Definir Orçamento</h3>
+            <button id="close-modal" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <form id="budget-form" class="p-6">
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="budget-limit">
+                    Valor Total do Orçamento (R$)
+                </label>
+                <input type="number" step="0.01" id="budget-limit" required
+                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button type="button" id="cancel-budget" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg">
+                    Cancelar
+                </button>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                    Salvar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Resumo do orçamento -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <!-- Card Orçamento Total -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-blue-100 text-blue-600 mr-4">
+                <i class="fas fa-wallet text-2xl"></i>
+            </div>
+            <div>
+                <p class="text-gray-500">Orçamento Total</p>
+                <h3 class="text-2xl font-bold" id="total-budget">R$ 0,00</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Despesas -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-red-100 text-red-600 mr-4">
+                <i class="fas fa-money-bill-wave text-2xl"></i>
+            </div>
+            <div>
+                <p class="text-gray-500">Total de Despesas</p>
+                <h3 class="text-2xl font-bold" id="total-expenses">R$ 0,00</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Saldo -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-green-100 text-green-600 mr-4">
+                <i class="fas fa-piggy-bank text-2xl"></i>
+            </div>
+            <div>
+                <p class="text-gray-500">Saldo Disponível</p>
+                <h3 class="text-2xl font-bold" id="remaining-balance">R$ 0,00</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Barra de progresso -->
+<div class="bg-white rounded-lg shadow p-6 mb-8">
+    <div class="flex justify-between items-center mb-2">
+        <span class="text-sm font-medium text-gray-700">Utilização do Orçamento</span>
+        <span class="text-sm font-medium" id="budget-percentage">0%</span>
+    </div>
+    <div class="w-full bg-gray-200 rounded-full h-2.5">
+        <div id="budget-progress" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+    </div>
+</div>
+
+<!-- Gráfico de despesas -->
+<div class="bg-white rounded-lg shadow p-6 mb-8">
+    <h3 class="text-lg font-semibold text-gray-800 mb-4">Distribuição de Despesas</h3>
+    <div class="h-64">
+        <canvas id="expenses-chart"></canvas>
+    </div>
+</div>
+
+<!-- Histórico de despesas -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-semibold text-gray-800">Histórico de Despesas</h3>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200" id="expenses-history">
+                <!-- Dados serão carregados via JavaScript -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Variáveis globais
+    let expensesChart;
+
+    // Carregar dados quando a página for carregada
+    document.addEventListener('DOMContentLoaded', function() {
+        loadBudgetData();
+        setupModal();
+    });
+
+    function loadBudgetData() {
+        fetch('/api/budget')
+            .then(response => response.json())
+            .then(budget => {
+                // Atualizar cards
+                document.getElementById('total-budget').textContent = formatCurrency(budget.limit);
+                document.getElementById('total-expenses').textContent = formatCurrency(budget.expenses);
+                document.getElementById('remaining-balance').textContent = formatCurrency(budget.limit - budget.expenses);
+
+                // Atualizar barra de progresso
+                const percentage = (budget.expenses / budget.limit) * 100;
+                document.getElementById('budget-percentage').textContent = `${percentage.toFixed(1)}%`;
+                document.getElementById('budget-progress').style.width = `${percentage}%`;
+
+                // Atualizar cor da barra de progresso conforme o uso
+                const progressBar = document.getElementById('budget-progress');
+                if (percentage > 80) {
+                    progressBar.classList.remove('bg-blue-600');
+                    progressBar.classList.add('bg-red-600');
+                } else if (percentage > 50) {
+                    progressBar.classList.remove('bg-blue-600');
+                    progressBar.classList.add('bg-yellow-500');
+                } else {
+                    progressBar.classList.remove('bg-red-600', 'bg-yellow-500');
+                    progressBar.classList.add('bg-blue-600');
+                }
+
+                // Carregar histórico de despesas (simulado)
+                loadExpensesHistory();
+            })
+            .catch(error => console.error('Erro ao carregar dados do orçamento:', error));
+    }
+
+    function setupModal() {
+        const modal = document.getElementById('budget-modal');
+        const setBudgetBtn = document.getElementById('set-budget-btn');
+        const closeModalBtn = document.getElementById('close-modal');
+        const cancelBudgetBtn = document.getElementById('cancel-budget');
+        const budgetForm = document.getElementById('budget-form');
+
+        setBudgetBtn.addEventListener('click', () => {
+            fetch('/api/budget')
+                .then(response => response.json())
+                .then(budget => {
+                    document.getElementById('budget-limit').value = budget.limit;
+                    modal.classList.remove('hidden');
+                });
+        });
+
+        closeModalBtn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+
+        cancelBudgetBtn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+
+        budgetForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const budgetData = {
+                limit: parseFloat(document.getElementById('budget-limit').value),
+                expenses: 0 // Resetar despesas ao definir novo orçamento
+            };
+
+            fetch('/api/budget', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(budgetData)
+            })
+            .then(response => {
+                if (response.ok) {
+                    modal.classList.add('hidden');
+                    loadBudgetData();
+                }
+            })
+            .catch(error => console.error('Erro ao salvar orçamento:', error));
+        });
+    }
+
+    function loadExpensesHistory() {
+        // Simulando dados de despesas (na implementação real, isso viria do backend)
+        const expenses = [
+            { date: '2023-11-15', description: 'Peças para manutenção', amount: 1250.50, category: 'Peças' },
+            { date: '2023-11-10', description: 'Serviço de freios', amount: 350.00, category: 'Mão de Obra' },
+            { date: '2023-11-05', description: 'Filtros e óleo', amount: 280.75, category: 'Consumíveis' },
+            { date: '2023-10-28', description: 'Alinhamento e balanceamento', amount: 180.00, category: 'Mão de Obra' },
+            { date: '2023-10-20', description: 'Pastilhas de freio', amount: 420.00, category: 'Peças' }
+        ];
+
+        const tbody = document.getElementById('expenses-history');
+        tbody.innerHTML = '';
+
+        expenses.forEach(expense => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDate(expense.date)}</td>
+                <td class="px-6 py-4 text-sm text-gray-500">${expense.description}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatCurrency(expense.amount)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${expense.category}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Atualizar gráfico
+        updateChart(expenses);
+    }
+
+    function updateChart(expenses) {
+        const ctx = document.getElementById('expenses-chart').getContext('2d');
+        
+        // Agrupar despesas por categoria
+        const categories = {};
+        expenses.forEach(expense => {
+            if (!categories[expense.category]) {
+                categories[expense.category] = 0;
+            }
+            categories[expense.category] += expense.amount;
+        });
+
+        // Se já existe um gráfico, destrua antes de criar um novo
+        if (expensesChart) {
+            expensesChart.destroy();
+        }
+
+        expensesChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(categories),
+                datasets: [{
+                    data: Object.values(categories),
+                    backgroundColor: [
+                        '#3B82F6',
+                        '#EF4444',
+                        '#10B981',
+                        '#F59E0B',
+                        '#8B5CF6'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.raw || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((value / total) * 100);
+                                return `${label}: ${formatCurrency(value)} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function formatDate(dateString) {
+        const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
+        return new Date(dateString).toLocaleDateString('pt-BR', options);
+    }
+</script>
+{% endblock %}
